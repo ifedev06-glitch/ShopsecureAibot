@@ -4,172 +4,133 @@ import json
 import os
 from typing import Any, Callable
 
-from openai import AsyncOpenAI
+from google import genai
+from google.genai import types
 
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-_TOOLS: list[dict[str, Any]] = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_wallet",
-            "description": "Get the vendor's wallet balance (available & processing)",
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_products",
-            "description": "List all products in the vendor's catalog",
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_product",
-            "description": "Add a new product to the vendor's catalog",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "Product name"},
-                    "price": {"type": "number", "description": "Product price in NGN"},
-                    "description": {"type": "string", "description": "Product description"},
-                    "stock": {"type": "integer", "description": "Available stock quantity"},
-                },
-                "required": ["name", "price"],
+_FUNCTION_DECLARATIONS: list[types.FunctionDeclaration] = [
+    types.FunctionDeclaration(
+        name="get_wallet",
+        description="Get the vendor's wallet balance (available & processing)",
+    ),
+    types.FunctionDeclaration(
+        name="list_products",
+        description="List all products in the vendor's catalog",
+    ),
+    types.FunctionDeclaration(
+        name="create_product",
+        description="Add a new product to the vendor's catalog",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "name": types.Schema(type=types.Type.STRING, description="Product name"),
+                "price": types.Schema(type=types.Type.NUMBER, description="Product price in NGN"),
+                "description": types.Schema(type=types.Type.STRING, description="Product description"),
+                "stock": types.Schema(type=types.Type.INTEGER, description="Available stock quantity"),
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "delete_product",
-            "description": "Delete a product from the vendor's catalog by its ID",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "product_id": {
-                        "type": "integer",
-                        "description": "The ID of the product to delete",
-                    },
-                },
-                "required": ["product_id"],
+            required=["name", "price"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="delete_product",
+        description="Delete a product from the vendor's catalog by its ID",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "product_id": types.Schema(type=types.Type.INTEGER, description="The ID of the product to delete"),
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_categories",
-            "description": "List all store categories",
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_category",
-            "description": "Create a new category",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "Category name"},
-                    "description": {"type": "string", "description": "Category description"},
-                },
-                "required": ["name"],
+            required=["product_id"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="list_categories",
+        description="List all store categories",
+    ),
+    types.FunctionDeclaration(
+        name="create_category",
+        description="Create a new category",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "name": types.Schema(type=types.Type.STRING, description="Category name"),
+                "description": types.Schema(type=types.Type.STRING, description="Category description"),
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_pending_orders",
-            "description": "List all pending orders",
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_order_history",
-            "description": "List past order history",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "page": {"type": "integer", "description": "Page number (0-based)"},
-                },
+            required=["name"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="list_pending_orders",
+        description="List all pending orders",
+    ),
+    types.FunctionDeclaration(
+        name="list_order_history",
+        description="List past order history",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "page": types.Schema(type=types.Type.INTEGER, description="Page number (0-based)"),
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_checkout_link_with_products",
-            "description": "Create a checkout link using existing products from the vendor's catalog. The link can be shared with a customer to complete payment.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "items": {
-                        "type": "array",
-                        "description": "List of products and quantities",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "productId": {"type": "integer", "description": "Product ID"},
-                                "quantity": {"type": "integer", "description": "Quantity"},
-                            },
-                            "required": ["productId", "quantity"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="create_checkout_link_with_products",
+        description="Create a checkout link using existing products from the vendor's catalog. The link can be shared with a customer to complete payment.",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "items": types.Schema(
+                    type=types.Type.ARRAY,
+                    description="List of products and quantities",
+                    items=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "productId": types.Schema(type=types.Type.INTEGER, description="Product ID"),
+                            "quantity": types.Schema(type=types.Type.INTEGER, description="Quantity"),
                         },
-                    },
-                },
-                "required": ["items"],
+                        required=["productId", "quantity"],
+                    ),
+                ),
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_checkout_link_custom",
-            "description": "Create a custom checkout link with a title and amount (not tied to existing products). Use this when the user wants a payment link for a custom item or amount.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string", "description": "Title of the payment request"},
-                    "amount": {"type": "number", "description": "Amount in NGN"},
-                    "description": {"type": "string", "description": "Optional description"},
-                },
-                "required": ["title", "amount"],
+            required=["items"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="create_checkout_link_custom",
+        description="Create a custom checkout link with a title and amount (not tied to existing products). Use this when the user wants a payment link for a custom item or amount.",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "title": types.Schema(type=types.Type.STRING, description="Title of the payment request"),
+                "amount": types.Schema(type=types.Type.NUMBER, description="Amount in NGN"),
+                "description": types.Schema(type=types.Type.STRING, description="Optional description"),
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_bank_account",
-            "description": "Get the vendor's saved bank account details",
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_withdrawals",
-            "description": "List withdrawal history",
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_transactions",
-            "description": "List payment transactions history",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "page": {"type": "integer", "description": "Page number (0-based)"},
-                },
+            required=["title", "amount"],
+        ),
+    ),
+    types.FunctionDeclaration(
+        name="get_bank_account",
+        description="Get the vendor's saved bank account details",
+    ),
+    types.FunctionDeclaration(
+        name="list_withdrawals",
+        description="List withdrawal history",
+    ),
+    types.FunctionDeclaration(
+        name="list_transactions",
+        description="List payment transactions history",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "page": types.Schema(type=types.Type.INTEGER, description="Page number (0-based)"),
             },
-        },
-    },
+        ),
+    ),
 ]
 
-_SYSTEM = (
+_TOOL = types.Tool(function_declarations=_FUNCTION_DECLARATIONS)
+
+_SYSTEM_INSTRUCTION = (
     "You are an AI assistant for ShopSecure, a Nigerian e-commerce platform.\n\n"
     "You help vendors manage their store via WhatsApp. You can:\n"
     "- Check wallet balance\n"
@@ -188,36 +149,59 @@ _SYSTEM = (
     "- Do NOT handle sensitive actions like withdrawals or PIN creation via the bot - redirect those to the dashboard.\n"
 )
 
+MODEL = "gemini-2.0-flash"
+
+
+def _to_gemini_contents(session: list[dict[str, str]]) -> list[types.Content]:
+    contents: list[types.Content] = []
+    for msg in session:
+        role = msg.get("role", "user")
+        role = "model" if role == "assistant" else "user" if role == "user" else role
+        parts = [types.Part(text=msg.get("content", ""))]
+        contents.append(types.Content(role=role, parts=parts))
+    return contents
+
 
 async def run_agent(
     session: list[dict[str, str]],
     api_call_fn: Callable,
     max_turns: int = 5,
 ) -> str:
-    session.append({"role": "system", "content": _SYSTEM})
-
     for _ in range(max_turns):
-        completion = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=session,
-            tools=_TOOLS,
-            tool_choice="auto",
+        contents = _to_gemini_contents(session)
+
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=_SYSTEM_INSTRUCTION,
+                tools=[_TOOL],
+            ),
         )
 
-        msg = completion.choices[0].message
+        candidate = response.candidates[0]
+        reply_content = candidate.content
 
-        if not msg.tool_calls:
-            session.append({"role": "assistant", "content": msg.content or ""})
-            return msg.content or ""
+        has_function_call = any(part.function_call for part in reply_content.parts)
 
-        session.append(msg.model_dump(exclude={"function_call"}))
+        if not has_function_call:
+            text = "".join(part.text or "" for part in reply_content.parts)
+            session.append({"role": "assistant", "content": text})
+            return text
 
-        for tc in msg.tool_calls:
-            fn_name = tc.function.name
-            try:
-                args = json.loads(tc.function.arguments)
-            except json.JSONDecodeError:
-                args = {}
+        assistant_msg: dict[str, Any] = {"role": "assistant", "content": ""}
+        tool_responses: list[dict[str, Any]] = []
+
+        for part in reply_content.parts:
+            if part.text:
+                assistant_msg["content"] += part.text
+
+            fc = part.function_call
+            if fc is None:
+                continue
+
+            fn_name = fc.name
+            args = {k: v for k, v in fc.args.items()}
 
             fn = getattr(api_call_fn, fn_name, None)
             if fn is None:
@@ -229,10 +213,14 @@ async def run_agent(
                     result = {"error": str(e)}
 
             result_str = json.dumps(result, default=str) if not isinstance(result, str) else result
-            session.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
+
+            tool_responses.append({
+                "role": "function",
+                "name": fn_name,
                 "content": result_str,
             })
+
+        session.append(assistant_msg)
+        session.extend(tool_responses)
 
     return "I'm sorry, I couldn't complete that request. Please try again."
