@@ -37,6 +37,25 @@ class AgentAdapter:
                                                category_id, cost_price)
         return f"✅ Product '{name}' added at ₦{price}."
 
+    async def update_product(self, product_id: int, name: str | None = None,
+                              price: float | None = None, description: str | None = None,
+                              stock: int | None = None, category_id: int | None = None,
+                              cost_price: float | None = None) -> str:
+        data = await self._api.update_product(product_id, name, price, description,
+                                                stock, category_id, cost_price)
+        updated = []
+        if name is not None:
+            updated.append(f"name={name}")
+        if price is not None:
+            updated.append(f"price=₦{price}")
+        if description is not None:
+            updated.append("description updated")
+        if stock is not None:
+            updated.append(f"stock={stock}")
+        if cost_price is not None:
+            updated.append(f"cost_price=₦{cost_price}")
+        return f"✅ Product {product_id} updated ({', '.join(updated)})."
+
     async def delete_product(self, product_id: int) -> str:
         await self._api.delete_product(product_id)
         return f"🗑️ Product {product_id} deleted."
@@ -106,6 +125,69 @@ class AgentAdapter:
         data = await self._api.save_bank_account(account_number, bank_code, pin)
         return (f"✅ Bank account saved: {data.get('bankName', 'N/A')} - "
                 f"{data.get('accountNumber', 'N/A')} ({data.get('accountName', 'N/A')})")
+
+    # ── PIN ──
+
+    async def create_pin(self, pin: str) -> str:
+        data = await self._api.create_pin(pin)
+        return "✅ Transaction PIN created successfully."
+
+    async def check_pin_status(self) -> str:
+        data = await self._api.check_pin_status()
+        has_pin = data.get("hasPin", False)
+        return f"PIN status: {'✅ Set' if has_pin else '❌ Not set'}. You need a PIN to withdraw funds."
+
+    # ── Business Profile ──
+
+    async def get_business_profile(self) -> str:
+        data = await self._api.get_business_profile()
+        return (
+            f"🏪 {data.get('businessName', 'N/A')}\n"
+            f"{data.get('description', 'No description')}\n"
+            f"📞 {data.get('phoneNumber', 'Not set')} | 📍 {data.get('address', 'Not set')}"
+        )
+
+    # ── Sales (additional) ──
+
+    async def delete_sale(self, sale_id: int) -> str:
+        await self._api.delete_sale(sale_id)
+        return f"🗑️ Sale {sale_id} deleted. Stock restored."
+
+    # ── Products (additional) ──
+
+    async def search_products(self, q: str = "", page: int = 0, size: int = 10) -> str:
+        data = await self._api.search_products(q, page, size)
+        products = data.get("content", [])
+        total = data.get("totalElements", 0)
+        if not products:
+            return "No products found."
+        lines = [f"{p['id']}. {p['name']} - ₦{p['price']} (stock: {p.get('stock', 0)})" for p in products]
+        return f"Found {total} products:\n" + "\n".join(lines)
+
+    # ── Expenses (additional) ──
+
+    async def update_expense(self, expense_id: int, title: str | None = None,
+                              amount: float | None = None, description: str | None = None,
+                              category: str | None = None,
+                              expense_date: str | None = None) -> str:
+        data = await self._api.update_expense(expense_id, title, amount, description,
+                                               category, expense_date)
+        updated = []
+        if title is not None:
+            updated.append(f"title={title}")
+        if amount is not None:
+            updated.append(f"amount=₦{amount}")
+        if description is not None:
+            updated.append("description updated")
+        if category is not None:
+            updated.append(f"category={category}")
+        if expense_date is not None:
+            updated.append(f"date={expense_date}")
+        return f"✅ Expense {expense_id} updated ({', '.join(updated)})."
+
+    async def delete_expense(self, expense_id: int) -> str:
+        await self._api.delete_expense(expense_id)
+        return f"🗑️ Expense {expense_id} deleted."
 
     # ── Withdrawals ──
 

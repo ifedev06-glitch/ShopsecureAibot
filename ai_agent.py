@@ -12,6 +12,96 @@ _TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "create_pin",
+            "description": "Create a 4-digit transaction PIN for withdrawals",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pin": {"type": "string", "description": "4-digit transaction PIN"},
+                },
+                "required": ["pin"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_pin_status",
+            "description": "Check if the vendor has a transaction PIN set",
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_business_profile",
+            "description": "Get the vendor's business profile details (name, description, phone, address)",
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_products",
+            "description": "Search products by name with pagination",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "q": {"type": "string", "description": "Search query (optional)"},
+                    "page": {"type": "integer", "description": "Page number (0-based, optional)"},
+                    "size": {"type": "integer", "description": "Results per page (optional)"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_sale",
+            "description": "Delete a recorded sale and restore stock",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sale_id": {"type": "integer", "description": "The ID of the sale to delete"},
+                },
+                "required": ["sale_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_expense",
+            "description": "Update an existing expense's details. Only send fields that need changing.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expense_id": {"type": "integer", "description": "The ID of the expense to update"},
+                    "title": {"type": "string", "description": "New expense title (optional)"},
+                    "amount": {"type": "number", "description": "New expense amount in NGN (optional)"},
+                    "description": {"type": "string", "description": "New expense description (optional)"},
+                    "category": {"type": "string", "description": "New expense category (optional)"},
+                    "expense_date": {"type": "string", "description": "New date in YYYY-MM-DD format (optional)"},
+                },
+                "required": ["expense_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_expense",
+            "description": "Delete an expense by its ID",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expense_id": {"type": "integer", "description": "The ID of the expense to delete"},
+                },
+                "required": ["expense_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_wallet",
             "description": "Get the vendor's wallet balance",
         },
@@ -39,6 +129,26 @@ _TOOLS: list[dict[str, Any]] = [
                     "cost_price": {"type": "number", "description": "Cost price in NGN (optional)"},
                 },
                 "required": ["name", "price"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_product",
+            "description": "Update an existing product's details (name, price, description, stock, category, or cost price). Only send fields that need changing.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "product_id": {"type": "integer", "description": "The ID of the product to update"},
+                    "name": {"type": "string", "description": "New product name (optional)"},
+                    "price": {"type": "number", "description": "New selling price in NGN (optional)"},
+                    "description": {"type": "string", "description": "New product description (optional)"},
+                    "stock": {"type": "integer", "description": "New stock quantity (optional)"},
+                    "category_id": {"type": "integer", "description": "New category ID (optional)"},
+                    "cost_price": {"type": "number", "description": "New cost price in NGN (optional)"},
+                },
+                "required": ["product_id"],
             },
         },
     },
@@ -331,20 +441,19 @@ _TOOLS: list[dict[str, Any]] = [
 
 _SYSTEM = (
     "You are ShopSecure AI, an AI assistant for ShopSecure — a business management platform for Nigerian merchants.\n\n"
-    "You help vendors manage their entire store via WhatsApp. You can do EVERYTHING the dashboard can do:\n\n"
-    "Store & Products:\n"
+    "You help vendors manage their entire business via WhatsApp. You can do EVERYTHING the dashboard can do:\n\n"
+    "Products:\n"
     "- Check wallet balance\n"
-    "- List, add, and delete products (including cost price)\n"
+    "- List, add, update, delete, and search products (including cost price and stock)\n"
     "- List and create categories\n\n"
-    "Orders & Sales:\n"
+    "Sales:\n"
     "- View pending orders and order history\n"
     "- Create checkout links (with products or custom amounts, with optional discounts)\n"
     "- Record offline sales (bank transfers)\n"
-    "- List recorded sales\n"
-    "- Get a text receipt for any sale\n\n"
+    "- List and delete recorded sales\n"
+    "- Get a text receipt or PDF receipt for any sale\n\n"
     "Expenses:\n"
-    "- List expenses\n"
-    "- Record new expenses\n\n"
+    "- List, add, update, and delete expenses\n\n"
     "Reports & Analytics:\n"
     "- Dashboard summary (revenue, expenses, profit, sales count, low stock)\n"
     "- Profit & Loss report\n"
@@ -352,15 +461,18 @@ _SYSTEM = (
     "- Expense report (by category)\n\n"
     "Finance:\n"
     "- View and save bank account details\n"
+    "- Create and check transaction PIN status\n"
     "- Initiate withdrawals (requires transaction PIN)\n"
     "- List withdrawal history\n"
     "- View transaction history\n\n"
+    "Business Profile:\n"
+    "- View business profile details (name, description, phone, address)\n\n"
     "Behaviours:\n"
     "- Respond in a friendly, concise way. Use simple emojis occasionally.\n"
-    "- When creating orders with products, FIRST call list_products to find the right product IDs.\n"
+    "- When creating orders with products, FIRST call list_products or search_products to find the right product IDs.\n"
     "- When listing products, if the list is long show a summary and ask which one.\n"
     "- Return checkout URLs to the user after creating a link.\n"
-    "- For sensitive actions (withdrawal, save bank account), ask the user for their 4-digit transaction PIN.\n"
+    "- For sensitive actions (withdrawal, save bank account, PIN creation), ask the user for their 4-digit transaction PIN.\n"
     "- Do NOT make up information. If you need more details, ask.\n"
     "- When recording a sale, look up the product's listed price first. If the customer paid less than the listed price, calculate the difference as a discount and pass it to create_sale. For example if a product costs ₦500,000 and the user says they sold it for ₦490,000, then discount = 10,000.\n"
     "- When the user asks about 'today', 'this week', 'this month', or anything date-related, use today's date provided above to calculate the correct date range.\n"

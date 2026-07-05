@@ -55,8 +55,33 @@ class ShopSecureClient:
             body["costPrice"] = cost_price
         return await self._request("POST", "/api/vendor/products", json=body)
 
+    async def update_product(self, product_id: int, name: str | None = None,
+                              price: float | None = None, description: str | None = None,
+                              stock: int | None = None, category_id: int | None = None,
+                              cost_price: float | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {}
+        if name is not None:
+            body["name"] = name
+        if price is not None:
+            body["price"] = price
+        if description is not None:
+            body["description"] = description
+        if stock is not None:
+            body["stock"] = stock
+        if category_id is not None:
+            body["categoryId"] = category_id
+        if cost_price is not None:
+            body["costPrice"] = cost_price
+        return await self._request("PATCH", f"/api/vendor/products/{product_id}", json=body)
+
+    async def search_products(self, q: str = "", page: int = 0, size: int = 10) -> dict[str, Any]:
+        return await self._request("GET", f"/api/vendor/products/search?q={q}&page={page}&size={size}")
+
     async def delete_product(self, product_id: int) -> None:
         await self._request("DELETE", f"/api/vendor/products/{product_id}")
+
+    async def delete_sale(self, sale_id: int) -> None:
+        await self._request("DELETE", f"/api/vendor/sales/{sale_id}")
 
     # ── Categories ──
     async def list_categories(self) -> list[dict[str, Any]]:
@@ -100,6 +125,17 @@ class ShopSecureClient:
             "bankCode": bank_code,
             "pin": pin,
         })
+
+    # ── PIN ──
+    async def create_pin(self, pin: str) -> dict[str, Any]:
+        return await self._request("POST", "/api/vendor/pin/create", json={"pin": pin})
+
+    async def check_pin_status(self) -> dict[str, Any]:
+        return await self._request("GET", "/api/vendor/pin/status")
+
+    # ── Business Profile ──
+    async def get_business_profile(self) -> dict[str, Any]:
+        return await self._request("GET", "/api/vendor/business")
 
     # ── Withdrawals ──
     async def create_withdrawal(self, amount: float, bank_account_id: int, pin: str) -> dict[str, Any]:
@@ -151,6 +187,26 @@ class ShopSecureClient:
         if expense_date:
             body["expenseDate"] = expense_date
         return await self._request("POST", "/api/vendor/expenses", json=body)
+
+    async def update_expense(self, expense_id: int, title: str | None = None,
+                              amount: float | None = None, description: str | None = None,
+                              category: str | None = None,
+                              expense_date: str | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {}
+        if title is not None:
+            body["title"] = title
+        if amount is not None:
+            body["amount"] = amount
+        if description is not None:
+            body["description"] = description
+        if category is not None:
+            body["category"] = category
+        if expense_date is not None:
+            body["expenseDate"] = expense_date
+        return await self._request("PUT", f"/api/vendor/expenses/{expense_id}", json=body)
+
+    async def delete_expense(self, expense_id: int) -> None:
+        await self._request("DELETE", f"/api/vendor/expenses/{expense_id}")
 
     # ── Reports ──
     async def get_dashboard_summary(self) -> dict[str, Any]:
