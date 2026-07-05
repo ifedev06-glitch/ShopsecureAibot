@@ -153,9 +153,33 @@ class AgentAdapter:
                           discount: float | None = None) -> str:
         data = await self._api.create_sale(items, customer_name, customer_phone,
                                             notes, discount)
+        sale_id = data.get("id")
         total = data.get("totalAmount", 0)
         number = data.get("saleNumber", "")
-        return f"✅ Sale {number} recorded for ₦{total}. Stock updated."
+
+        receipt = await self._api.get_receipt(sale_id)
+        lines = [
+            f"🧾 *RECEIPT {receipt['receiptNumber']}*",
+            f"🏪 {receipt['businessName']}",
+            f"📅 {receipt['createdAt'][:10]}",
+        ]
+        if receipt.get("customerName"):
+            lines.append(f"👤 {receipt['customerName']}")
+        lines.append("")
+        for item in receipt.get("items", []):
+            lines.append(
+                f"  {item['productName']} ×{item['quantity']}"
+            )
+            lines.append(
+                f"  ₦{float(item['unitPrice']):,.2f} ea  =  ₦{float(item['total']):,.2f}"
+            )
+        lines.append("")
+        lines.append(f"  Subtotal          ₦{float(receipt['subtotal']):,.2f}")
+        if receipt.get("discount") and float(receipt["discount"]) > 0:
+            lines.append(f"  Discount         -₦{float(receipt['discount']):,.2f}")
+        lines.append(f"  *TOTAL            ₦{float(receipt['total']):,.2f}*")
+        lines.append(f"  *{receipt['paymentMethod']}*")
+        return "\n".join(lines)
 
     # ── Expenses ──
 
