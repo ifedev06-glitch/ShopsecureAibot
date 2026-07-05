@@ -104,7 +104,7 @@ async def handle_message(phone: str, text: str) -> None:
     session.append({"role": "user", "content": text})
 
     client = ShopSecureClient(token)
-    adapter = AgentAdapter(client)
+    adapter = AgentAdapter(client, phone, send_document)
 
     try:
         reply = await run_agent(session, adapter)
@@ -131,6 +131,34 @@ async def send_whatsapp(to: str, text: str) -> None:
     }
     async with httpx.AsyncClient() as client:
         await client.post(url, json=payload, headers=headers)
+
+
+# ── WhatsApp document send helper ──
+
+async def send_document(to: str, pdf_bytes: bytes, filename: str) -> None:
+    # Upload media
+    upload_url = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/media"
+    headers = {"Authorization": f"Bearer {META_TOKEN}"}
+    files = {
+        "file": (filename, pdf_bytes, "application/pdf"),
+        "type": (None, "application/pdf"),
+        "messaging_product": (None, "whatsapp"),
+    }
+    async with httpx.AsyncClient() as client:
+        upload_resp = await client.post(upload_url, headers=headers, files=files)
+        upload_resp.raise_for_status()
+        media_id = upload_resp.json()["id"]
+
+    # Send document
+    msg_url = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "document",
+        "document": {"id": media_id, "filename": filename},
+    }
+    async with httpx.AsyncClient() as client:
+        await client.post(msg_url, json=payload, headers=headers)
 
 
 # ── Send welcome message (called by backend after linking) ──

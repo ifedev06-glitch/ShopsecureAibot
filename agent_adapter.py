@@ -1,15 +1,89 @@
 from __future__ import annotations
 
+import io
 from typing import Any
 
+from fpdf import FPDF
+
 from shopsecure_api import ShopSecureClient
+
+
+def generate_receipt_pdf(receipt: dict[str, Any]) -> bytes:
+    pdf = FPDF(orientation="P", unit="mm", format=(80, 200))
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=8)
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, receipt.get("businessName", "Store"), align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    pdf.set_font("Helvetica", "", 7)
+    pdf.cell(0, 4, f"{receipt['receiptNumber']}  |  {receipt['createdAt'][:10]}", align="C", new_x="LMARGIN", new_y="NEXT")
+
+    if receipt.get("customerName"):
+        pdf.ln(2)
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.cell(0, 4, f"Customer: {receipt['customerName']}", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.ln(2)
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(4, pdf.get_y(), 76, pdf.get_y())
+    pdf.ln(2)
+
+    pdf.set_font("Helvetica", "B", 7)
+    col_w = [32, 10, 16, 18]
+    headers = ["Item", "Qty", "Price", "Total"]
+    for i, h in enumerate(headers):
+        pdf.cell(col_w[i], 5, h, align="C" if i > 0 else "L")
+    pdf.ln()
+
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(4, pdf.get_y(), 76, pdf.get_y())
+    pdf.ln(1)
+
+    pdf.set_font("Helvetica", "", 7)
+    for item in receipt.get("items", []):
+        pdf.cell(col_w[0], 5, item["productName"][:18], align="L")
+        pdf.cell(col_w[1], 5, str(item["quantity"]), align="C")
+        pdf.cell(col_w[2], 5, f"N{float(item['unitPrice']):,.0f}", align="C")
+        pdf.cell(col_w[3], 5, f"N{float(item['total']):,.0f}", align="C")
+        pdf.ln()
+
+    pdf.ln(1)
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(4, pdf.get_y(), 76, pdf.get_y())
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(0, 5, f"Subtotal          N{float(receipt['subtotal']):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+    if receipt.get("discount") and float(receipt["discount"]) > 0:
+        pdf.set_text_color(220, 38, 38)
+        pdf.cell(0, 5, f"Discount         -N{float(receipt['discount']):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 7, f"TOTAL            N{float(receipt['total']):,.2f}", align="R", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.cell(0, 4, receipt.get("paymentMethod", ""), align="C", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.ln(3)
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(4, pdf.get_y(), 76, pdf.get_y())
+    pdf.ln(2)
+    pdf.set_font("Helvetica", "", 6)
+    pdf.cell(0, 4, "Powered by ShopSecure", align="C", new_x="LMARGIN", new_y="NEXT")
+
+    return pdf.output()
 
 
 class AgentAdapter:
     """Maps AI function names to ShopSecure API calls."""
 
-    def __init__(self, api: ShopSecureClient) -> None:
+    def __init__(self, api: ShopSecureClient, phone: str = "",
+                 send_document_fn: Any | None = None) -> None:
         self._api = api
+        self._phone = phone
+        self._send_document = send_document_fn
 
     # ── Wallet ──
 
@@ -158,27 +232,19 @@ class AgentAdapter:
         number = data.get("saleNumber", "")
 
         receipt = await self._api.get_receipt(sale_id)
+
+        # Send PDF receipt via WhatsApp document
+        if self._send_document and self._phone:
+            pdf_bytes = generate_receipt_pdf(receipt)
+            try:
+                await self._send_document(self._phone, pdf_bytes, f"receipt-{number}.pdf")
+            except Exception:
+                pass
+
         lines = [
-            f"🧾 *RECEIPT {receipt['receiptNumber']}*",
-            f"🏪 {receipt['businessName']}",
-            f"📅 {receipt['createdAt'][:10]}",
+            f"✅ Sale {number} recorded for ₦{total}. Stock updated.",
+            "📎 PDF receipt sent to this chat.",
         ]
-        if receipt.get("customerName"):
-            lines.append(f"👤 {receipt['customerName']}")
-        lines.append("")
-        for item in receipt.get("items", []):
-            lines.append(
-                f"  {item['productName']} ×{item['quantity']}"
-            )
-            lines.append(
-                f"  ₦{float(item['unitPrice']):,.2f} ea  =  ₦{float(item['total']):,.2f}"
-            )
-        lines.append("")
-        lines.append(f"  Subtotal          ₦{float(receipt['subtotal']):,.2f}")
-        if receipt.get("discount") and float(receipt["discount"]) > 0:
-            lines.append(f"  Discount         -₦{float(receipt['discount']):,.2f}")
-        lines.append(f"  *TOTAL            ₦{float(receipt['total']):,.2f}*")
-        lines.append(f"  *{receipt['paymentMethod']}*")
         return "\n".join(lines)
 
     # ── Expenses ──
