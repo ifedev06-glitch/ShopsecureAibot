@@ -142,10 +142,8 @@ async def send_document(to: str, pdf_bytes: bytes, filename: str) -> None:
     async with httpx.AsyncClient() as client:
         upload_resp = await client.post(
             upload_url, headers=headers,
-            files=[
-                ("messaging_product", "whatsapp"),
-                ("file", (filename, pdf_bytes, "application/pdf")),
-            ],
+            data={"messaging_product": "whatsapp"},
+            files={"file": (filename, pdf_bytes, "application/pdf")},
         )
         body = upload_resp.json()
         print(f"send_document: upload status={upload_resp.status_code}, body={body}")
