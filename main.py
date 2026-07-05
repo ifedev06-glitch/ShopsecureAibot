@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import random
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -148,6 +149,8 @@ _QUICK_REPLIES: dict[str, str] = {
 async def handle_message(phone: str, text: str) -> None:
     stop_typing = asyncio.Event()
     typing_task = asyncio.create_task(keep_typing(phone, stop_typing))
+
+    await send_whatsapp(phone, random.choice(["One sec...", "Give me a moment..."]))
 
     async def reply(text: str) -> None:
         stop_typing.set()
