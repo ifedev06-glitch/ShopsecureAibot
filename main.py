@@ -83,18 +83,77 @@ async def resolve_vendor_token(phone: str) -> str | None:
     return None
 
 
+async def send_typing_indicator(to: str) -> None:
+    url = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {META_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "sender_action": "typing_on",
+    }
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(url, json=payload, headers=headers)
+        except Exception:
+            pass
+
+
 async def handle_message(phone: str, text: str) -> None:
+    await send_typing_indicator(phone)
     token = await resolve_vendor_token(phone)
 
     if not token:
         await send_whatsapp(
             phone,
             "👋 Welcome to ShopSecure!\n\n"
-            "Your WhatsApp number isn't linked yet.\n\n"
-            "Go to your ShopSecure dashboard → Link WhatsApp and enter this number:\n"
-            f"{phone}\n\n"
-            "Once linked, message me again and I'll help you manage your store!",
+            "Your WhatsApp isn't linked yet. Here's how to get started:\n\n"
+            "1. Go to your ShopSecure dashboard\n"
+            "2. Click *Connect your AI Assistant*\n"
+            "3. Enter this phone number:\n\n"
+            f"   {phone}\n\n"
+            "Once linked, send me a message and I'll be ready to help!",
         )
+        return
+
+    QUICK_REPLIES = {
+        "hello": "Hey there! 👋 How can I help you with your business today?",
+        "hi": "Hey! What can I help you with?",
+        "hey": "Hey! What can I help you with?",
+        "good morning": "Good morning! ☀️ Ready to take care of business today?",
+        "good evening": "Good evening! 🌆 What can I help you with?",
+        "what can you do": "I'm your all-in-one business assistant. Here's what I can do for you:\n\n"
+                          "📦 *Products* — Add, edit, search, and track stock levels\n"
+                          "💰 *Wallet* — Check balance, withdraw to your bank\n"
+                          "🧾 *Sales* — Record sales, send PDF receipts via WhatsApp\n"
+                          "💸 *Expenses* — Log and categorise every expense\n"
+                          "📊 *Reports* — Dashboard summary, P&L, sales & expense reports\n"
+                          "🏦 *Bank* — Save and view your bank account details\n\n"
+                          "Go ahead, tell me what you need — I'm ready!",
+        "help": "Here's everything I can help you with:\n\n"
+                "📦 *Products*\n"
+                "  → Add, update, delete, search products\n\n"
+                "🧾 *Sales*\n"
+                "  → Record sales, view history, delete sales, get PDF receipts\n\n"
+                "💸 *Expenses*\n"
+                "  → Log, update, and delete business expenses\n\n"
+                "📊 *Reports*\n"
+                "  → Dashboard summary, P&L, sales report, expense report\n\n"
+                "💰 *Finance*\n"
+                "  → Check wallet, save bank account, withdraw, view transactions\n\n"
+                "Just say something like \"add a product\" or \"show me my sales\" and I'll take care of it!",
+    }
+
+    if text.strip().lower() in QUICK_REPLIES:
+        reply = QUICK_REPLIES[text.strip().lower()]
+        session = sessions.get(phone, [])
+        session.append({"role": "user", "content": text})
+        session.append({"role": "assistant", "content": reply})
+        sessions[phone] = session
+        await send_whatsapp(phone, reply)
         return
 
     if phone not in sessions:
@@ -178,8 +237,10 @@ async def send_welcome(payload: dict[str, str]) -> dict[str, str]:
     if not phone:
         return {"status": "error", "message": "phone_number is required"}
     message = (
-        f"Hey {business_name}, I am ShopSecure AI, your AI-powered assistant. "
-        f"Kindly save me!"
+        f"Hello {business_name} 👋\n\n"
+        f"I'm ShopSecure AI, your business assistant. I can help you manage products, "
+        f"track sales, record expenses, run reports, and more — right here on WhatsApp.\n\n"
+        f"Try saying \"what can you do\" or just tell me what you need help with."
     )
     await send_whatsapp(phone, message)
     return {"status": "ok"}
