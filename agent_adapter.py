@@ -6,10 +6,7 @@ from shopsecure_api import ShopSecureClient
 
 
 class AgentAdapter:
-    """Maps AI function names to ShopSecure API calls.
-
-    Each method name matches the "name" field in the AI tool definitions.
-    """
+    """Maps AI function names to ShopSecure API calls."""
 
     def __init__(self, api: ShopSecureClient) -> None:
         self._api = api
@@ -18,9 +15,8 @@ class AgentAdapter:
 
     async def get_wallet(self) -> str:
         data = await self._api.get_wallet()
-        avail = data.get("availableBalance", "0")
-        proc = data.get("processingBalance", "0")
-        return f"Wallet: available ₦{avail}, processing ₦{proc}"
+        balance = data.get("balance", "0")
+        return f"Wallet balance: ₦{balance}"
 
     # ── Products ──
 
@@ -31,8 +27,11 @@ class AgentAdapter:
         lines = [f"{p['id']}. {p['name']} - ₦{p['price']} (stock: {p.get('stock', 0)})" for p in products]
         return "Your products:\n" + "\n".join(lines)
 
-    async def create_product(self, name: str, price: float, description: str = "", stock: int = 0) -> str:
-        data = await self._api.create_product(name, price, description, stock)
+    async def create_product(self, name: str, price: float, description: str = "",
+                             stock: int = 0, category_id: int | None = None,
+                             cost_price: float | None = None) -> str:
+        data = await self._api.create_product(name, price, description, stock,
+                                               category_id, cost_price)
         return f"✅ Product '{name}' added at ₦{price}."
 
     async def delete_product(self, product_id: int) -> str:
@@ -76,19 +75,22 @@ class AgentAdapter:
 
     # ── Checkout Links ──
 
-    async def create_checkout_link_with_products(self, items: list[dict]) -> str:
-        data = await self._api.create_checkout_link_with_products(items)
+    async def create_checkout_link_with_products(self, items: list[dict],
+                                                  discount: float | None = None) -> str:
+        data = await self._api.create_checkout_link_with_products(items, discount)
         url = data.get("checkoutUrl", data.get("checkout_url", ""))
         total = data.get("totalAmount", data.get("total_amount", ""))
         return f"✅ Order link created! Share with your customer:\n{url}\nTotal: ₦{total}"
 
-    async def create_checkout_link_custom(self, title: str, amount: float, description: str = "") -> str:
-        data = await self._api.create_checkout_link_custom(title, amount, description)
+    async def create_checkout_link_custom(self, title: str, amount: float,
+                                           description: str = "",
+                                           discount: float | None = None) -> str:
+        data = await self._api.create_checkout_link_custom(title, amount, description, discount)
         url = data.get("checkoutUrl", data.get("checkout_url", ""))
         total = data.get("totalAmount", data.get("total_amount", ""))
         return f"✅ Custom payment link created!\n{url}\n{title}: ₦{total}"
 
-    # ── Bank / Withdrawals / Transactions ──
+    # ── Bank Account ──
 
     async def get_bank_account(self) -> str:
         data = await self._api.get_bank_account()
@@ -97,6 +99,17 @@ class AgentAdapter:
         return (f"Bank: {data.get('bankName', 'N/A')} - "
                 f"{data.get('accountNumber', 'N/A')} ({data.get('accountName', 'N/A')})")
 
+    async def save_bank_account(self, account_number: str, bank_code: str, pin: str) -> str:
+        data = await self._api.save_bank_account(account_number, bank_code, pin)
+        return (f"✅ Bank account saved: {data.get('bankName', 'N/A')} - "
+                f"{data.get('accountNumber', 'N/A')} ({data.get('accountName', 'N/A')})")
+
+    # ── Withdrawals ──
+
+    async def create_withdrawal(self, amount: float, bank_account_id: int, pin: str) -> str:
+        data = await self._api.create_withdrawal(amount, bank_account_id, pin)
+        return f"✅ Withdrawal of ₦{amount} initiated successfully."
+
     async def list_withdrawals(self) -> str:
         withdrawals = await self._api.list_withdrawals()
         if not withdrawals:
@@ -104,6 +117,8 @@ class AgentAdapter:
         lines = [f"₦{w['amount']} - {w.get('status', 'N/A')} - {w.get('createdAt', '')[:10]}"
                  for w in withdrawals]
         return "Withdrawals:\n" + "\n".join(lines)
+
+    # ── Transactions ──
 
     async def list_transactions(self, page: int = 0) -> str:
         data = await self._api.list_transactions(page)
@@ -114,3 +129,119 @@ class AgentAdapter:
         for t in txns:
             lines.append(f"₦{t.get('amount', 0)} - {t.get('status', 'N/A')} - {t.get('createdAt', '')[:10]}")
         return "Transactions:\n" + "\n".join(lines)
+
+    # ── Sales ──
+
+    async def list_sales(self) -> str:
+        sales = await self._api.list_sales()
+        if not sales:
+            return "No sales recorded yet."
+        lines = []
+        for s in sales:
+            items_info = ", ".join(
+                f"{i.get('productName', '?')} ×{i.get('quantity', 0)}"
+                for i in s.get("items", [])
+            )
+            lines.append(
+                f"{s['saleNumber']} - ₦{s['totalAmount']} - {s.get('paymentMethod', 'N/A')}"
+                f"{' - ' + items_info if items_info else ''}"
+            )
+        return "Recent sales:\n" + "\n".join(lines)
+
+    async def create_sale(self, items: list[dict], customer_name: str = "",
+                          customer_phone: str = "", notes: str = "",
+                          discount: float | None = None) -> str:
+        data = await self._api.create_sale(items, customer_name, customer_phone,
+                                            notes, discount)
+        total = data.get("totalAmount", 0)
+        number = data.get("saleNumber", "")
+        return f"✅ Sale {number} recorded for ₦{total}. Stock updated."
+
+    # ── Expenses ──
+
+    async def list_expenses(self) -> str:
+        expenses = await self._api.list_expenses()
+        if not expenses:
+            return "No expenses recorded yet."
+        lines = [f"₦{e['amount']} - {e.get('title', '')} - {e.get('category', 'N/A')} - {e.get('createdAt', '')[:10]}"
+                 for e in expenses]
+        return "Expenses:\n" + "\n".join(lines)
+
+    async def create_expense(self, title: str, amount: float, description: str = "",
+                             category: str = "", expense_date: str = "") -> str:
+        data = await self._api.create_expense(title, amount, description, category, expense_date)
+        return f"✅ Expense '{title}' of ₦{amount} recorded."
+
+    # ── Reports ──
+
+    async def get_dashboard_summary(self) -> str:
+        data = await self._api.get_dashboard_summary()
+        return (
+            f"📊 Dashboard Summary\n"
+            f"Revenue: ₦{data.get('totalRevenue', 0)}\n"
+            f"Expenses: ₦{data.get('totalExpenses', 0)}\n"
+            f"Net Profit: ₦{data.get('netProfit', 0)}\n"
+            f"Sales Count: {data.get('totalSalesCount', 0)}\n"
+            f"Low Stock Items: {data.get('lowStockCount', 0)}"
+        )
+
+    async def get_profit_loss_report(self, start_date: str = "", end_date: str = "") -> str:
+        data = await self._api.get_profit_loss_report(start_date, end_date)
+        period = f"{data.get('startDate', 'start')} to {data.get('endDate', 'end')}"
+        return (
+            f"📈 Profit & Loss ({period})\n"
+            f"Revenue: ₦{data.get('totalRevenue', 0)}\n"
+            f"COGS: ₦{data.get('totalCostOfGoodsSold', 0)}\n"
+            f"Gross Profit: ₦{data.get('grossProfit', 0)}\n"
+            f"Expenses: ₦{data.get('totalExpenses', 0)}\n"
+            f"Net Profit: ₦{data.get('netProfit', 0)}"
+        )
+
+    async def get_sales_report(self, start_date: str = "", end_date: str = "") -> str:
+        data = await self._api.get_sales_report(start_date, end_date)
+        lines = [f"📦 Sales Report ({data.get('startDate', 'start')} to {data.get('endDate', 'end')})"]
+        lines.append(f"Total Sales: {data.get('totalSales', 0)}")
+        lines.append(f"Total Revenue: ₦{data.get('totalRevenue', 0)}")
+        top = data.get("topProducts", [])
+        if top:
+            lines.append("\nTop Products:")
+            for p in top[:5]:
+                lines.append(f"  {p.get('productName', '?')} - {p.get('quantitySold', 0)} sold - ₦{p.get('revenue', 0)}")
+        pm = data.get("salesByPaymentMethod", {})
+        if pm:
+            lines.append("\nBy Payment Method:")
+            for method, count in pm.items():
+                lines.append(f"  {method}: {count}")
+        return "\n".join(lines)
+
+    async def get_expense_report(self, start_date: str = "", end_date: str = "") -> str:
+        data = await self._api.get_expense_report(start_date, end_date)
+        lines = [f"📉 Expense Report ({data.get('startDate', 'start')} to {data.get('endDate', 'end')})"]
+        lines.append(f"Total Entries: {data.get('totalExpenses', 0)}")
+        lines.append(f"Total Amount: ₦{data.get('totalAmount', 0)}")
+        cats = data.get("byCategory", {})
+        if cats:
+            lines.append("\nBy Category:")
+            for cat, info in sorted(cats.items(), key=lambda x: x[1]["total"], reverse=True):
+                lines.append(f"  {cat}: ₦{info['total']} ({info['count']} entries)")
+        return "\n".join(lines)
+
+    # ── Receipts ──
+
+    async def get_receipt(self, sale_id: int) -> str:
+        data = await self._api.get_receipt(sale_id)
+        lines = [f"🧾 Receipt: {data.get('saleNumber', 'N/A')}"]
+        lines.append(f"Date: {data.get('createdAt', '')[:10]}")
+        if data.get("customerName"):
+            lines.append(f"Customer: {data['customerName']}")
+        lines.append("")
+        for item in data.get("items", []):
+            lines.append(f"{item.get('productName', '?')} ×{item.get('quantity', 0)}  "
+                         f"₦{item.get('sellingPrice', 0)}  =  ₦{item.get('subtotal', 0)}")
+        lines.append("")
+        lines.append(f"Subtotal: ₦{data.get('totalAmount', 0) + data.get('discount', 0)}")
+        if data.get("discount", 0) > 0:
+            lines.append(f"Discount: -₦{data['discount']}")
+        lines.append(f"Total: ₦{data.get('totalAmount', 0)}")
+        lines.append(f"Payment: {data.get('paymentMethod', 'N/A')}")
+        return "\n".join(lines)
