@@ -133,6 +133,22 @@ async def send_whatsapp(to: str, text: str) -> None:
         await client.post(url, json=payload, headers=headers)
 
 
+# ── Send welcome message (called by backend after linking) ──
+
+@app.post("/send-welcome")
+async def send_welcome(payload: dict[str, str]) -> dict[str, str]:
+    phone = payload.get("phone_number", "")
+    business_name = payload.get("business_name", "")
+    if not phone:
+        return {"status": "error", "message": "phone_number is required"}
+    message = (
+        f"Hey {business_name}, I am ShopSecure AI, your AI-powered assistant. "
+        f"Kindly save me!"
+    )
+    await send_whatsapp(phone, message)
+    return {"status": "ok"}
+
+
 # ── Health check ──
 
 @app.get("/")
