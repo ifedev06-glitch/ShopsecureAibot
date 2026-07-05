@@ -234,8 +234,12 @@ class AgentAdapter:
         print(f"create_sale: sale_id={sale_id}, number={number}, total={total}")
 
         print(f"create_sale: fetching receipt for sale_id={sale_id}")
-        receipt = await self._api.get_receipt(sale_id)
-        print(f"create_sale: receipt received, keys={list(receipt.keys())}")
+        try:
+            receipt = await self._api.get_receipt(sale_id)
+            print(f"create_sale: receipt received, keys={list(receipt.keys())}")
+        except Exception as e:
+            print(f"create_sale: get_receipt FAILED: {e}")
+            return f"✅ Sale {number} recorded for ₦{total}. Stock updated.\n\n⚠️ Could not generate receipt: {e}"
 
         # Build text receipt as fallback
         receipt_lines = [
