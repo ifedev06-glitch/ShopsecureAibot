@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from typing import Any
@@ -91,9 +92,9 @@ async def send_typing_indicator(to: str) -> None:
     }
     payload = {
         "messaging_product": "whatsapp",
-        "recipient_type": "individual",
         "to": to,
-        "sender_action": "typing_on",
+        "type": "action",
+        "action": {"name": "typing_on"},
     }
     async with httpx.AsyncClient() as client:
         try:
@@ -102,76 +103,99 @@ async def send_typing_indicator(to: str) -> None:
             pass
 
 
+async def keep_typing(phone: str, stop_event: asyncio.Event) -> None:
+    while not stop_event.is_set():
+        await send_typing_indicator(phone)
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=12)
+        except asyncio.TimeoutError:
+            pass
+
+
+_QUICK_REPLIES: dict[str, str] = {
+    "hello": "Hey there! 👋 How can I help you with your business today?",
+    "hi": "Hey! What can I help you with?",
+    "hey": "Hey! What can I help you with?",
+    "good morning": "Good morning! ☀️ Ready to take care of business today?",
+    "good evening": "Good evening! 🌆 What can I help you with?",
+    "what can you do": (
+        "I'm your all-in-one business assistant. Here's what I can do for you:\n\n"
+        "📦 *Products* — Add, edit, search, and track stock levels\n"
+        "💰 *Wallet* — Check balance, withdraw to your bank\n"
+        "🧾 *Sales* — Record sales, send PDF receipts via WhatsApp\n"
+        "💸 *Expenses* — Log and categorise every expense\n"
+        "📊 *Reports* — Dashboard summary, P&L, sales & expense reports\n"
+        "🏦 *Bank* — Save and view your bank account details\n\n"
+        "Go ahead, tell me what you need — I'm ready!"
+    ),
+    "help": (
+        "Here's everything I can help you with:\n\n"
+        "📦 *Products*\n"
+        "  → Add, update, delete, search products\n\n"
+        "🧾 *Sales*\n"
+        "  → Record sales, view history, delete sales, get PDF receipts\n\n"
+        "💸 *Expenses*\n"
+        "  → Log, update, and delete business expenses\n\n"
+        "📊 *Reports*\n"
+        "  → Dashboard summary, P&L, sales report, expense report\n\n"
+        "💰 *Finance*\n"
+        "  → Check wallet, save bank account, withdraw, view transactions\n\n"
+        "Just say something like \"add a product\" or \"show me my sales\" and I'll take care of it!"
+    ),
+}
+
+
 async def handle_message(phone: str, text: str) -> None:
-    await send_typing_indicator(phone)
-    token = await resolve_vendor_token(phone)
+    stop_typing = asyncio.Event()
+    typing_task = asyncio.create_task(keep_typing(phone, stop_typing))
 
-    if not token:
-        await send_whatsapp(
-            phone,
-            "👋 Welcome to ShopSecure!\n\n"
-            "Your WhatsApp isn't linked yet. Here's how to get started:\n\n"
-            "1. Go to your ShopSecure dashboard\n"
-            "2. Click *Connect your AI Assistant*\n"
-            "3. Enter this phone number:\n\n"
-            f"   {phone}\n\n"
-            "Once linked, send me a message and I'll be ready to help!",
-        )
-        return
-
-    QUICK_REPLIES = {
-        "hello": "Hey there! 👋 How can I help you with your business today?",
-        "hi": "Hey! What can I help you with?",
-        "hey": "Hey! What can I help you with?",
-        "good morning": "Good morning! ☀️ Ready to take care of business today?",
-        "good evening": "Good evening! 🌆 What can I help you with?",
-        "what can you do": "I'm your all-in-one business assistant. Here's what I can do for you:\n\n"
-                          "📦 *Products* — Add, edit, search, and track stock levels\n"
-                          "💰 *Wallet* — Check balance, withdraw to your bank\n"
-                          "🧾 *Sales* — Record sales, send PDF receipts via WhatsApp\n"
-                          "💸 *Expenses* — Log and categorise every expense\n"
-                          "📊 *Reports* — Dashboard summary, P&L, sales & expense reports\n"
-                          "🏦 *Bank* — Save and view your bank account details\n\n"
-                          "Go ahead, tell me what you need — I'm ready!",
-        "help": "Here's everything I can help you with:\n\n"
-                "📦 *Products*\n"
-                "  → Add, update, delete, search products\n\n"
-                "🧾 *Sales*\n"
-                "  → Record sales, view history, delete sales, get PDF receipts\n\n"
-                "💸 *Expenses*\n"
-                "  → Log, update, and delete business expenses\n\n"
-                "📊 *Reports*\n"
-                "  → Dashboard summary, P&L, sales report, expense report\n\n"
-                "💰 *Finance*\n"
-                "  → Check wallet, save bank account, withdraw, view transactions\n\n"
-                "Just say something like \"add a product\" or \"show me my sales\" and I'll take care of it!",
-    }
-
-    if text.strip().lower() in QUICK_REPLIES:
-        reply = QUICK_REPLIES[text.strip().lower()]
-        session = sessions.get(phone, [])
-        session.append({"role": "user", "content": text})
-        session.append({"role": "assistant", "content": reply})
-        sessions[phone] = session
-        await send_whatsapp(phone, reply)
-        return
-
-    if phone not in sessions:
-        sessions[phone] = []
-
-    session = sessions[phone]
-    session.append({"role": "user", "content": text})
-
-    client = ShopSecureClient(token)
-    adapter = AgentAdapter(client, phone, send_document)
+    async def reply(text: str) -> None:
+        stop_typing.set()
+        await send_whatsapp(phone, text)
 
     try:
-        reply = await run_agent(session, adapter)
-        await send_whatsapp(phone, reply)
-    except Exception as e:
-        await send_whatsapp(phone, f"Sorry, something went wrong: {e}")
+        token = await resolve_vendor_token(phone)
+
+        if not token:
+            await reply(
+                "👋 Welcome to ShopSecure!\n\n"
+                "Your WhatsApp isn't linked yet. Here's how to get started:\n\n"
+                "1. Go to your ShopSecure dashboard\n"
+                "2. Click *Connect your AI Assistant*\n"
+                "3. Enter this phone number:\n\n"
+                f"   {phone}\n\n"
+                "Once linked, send me a message and I'll be ready to help!"
+            )
+            return
+
+        key = text.strip().lower()
+        if key in _QUICK_REPLIES:
+            quick_reply = _QUICK_REPLIES[key]
+            session = sessions.get(phone, [])
+            session.append({"role": "user", "content": text})
+            session.append({"role": "assistant", "content": quick_reply})
+            sessions[phone] = session
+            await reply(quick_reply)
+            return
+
+        if phone not in sessions:
+            sessions[phone] = []
+
+        session = sessions[phone]
+        session.append({"role": "user", "content": text})
+
+        client = ShopSecureClient(token)
+        adapter = AgentAdapter(client, phone, send_document)
+
+        try:
+            agent_reply = await run_agent(session, adapter)
+            await reply(agent_reply)
+        except Exception as e:
+            await reply(f"Sorry, something went wrong: {e}")
+        finally:
+            await client.close()
     finally:
-        await client.close()
+        stop_typing.set()
 
 
 # ── WhatsApp send helper ──
