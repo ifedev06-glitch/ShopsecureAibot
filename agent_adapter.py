@@ -30,12 +30,12 @@ class AgentAdapter:
         lines = [f"{p['id']}. {p['name']} - ₦{p['price']} (stock: {p.get('stock', 0)})" for p in products]
         return "Your products:\n" + "\n".join(lines)
 
-    async def create_product(self, name: str, price: float, description: str = "",
-                             stock: int = 0, category_id: int | None = None,
-                             cost_price: float | None = None) -> str:
-        data = await self._api.create_product(name, price, description, stock,
-                                               category_id, cost_price)
-        return f"✅ Product '{name}' added at ₦{price}."
+    async def create_product(self, name: str, price: float, cost_price: float,
+                              description: str, stock: int = 0,
+                              category_id: int | None = None) -> str:
+        data = await self._api.create_product(name, price, cost_price, description,
+                                                stock, category_id)
+        return f"✅ Product '{name}' added at ₦{price} (cost: ₦{cost_price})."
 
     async def update_product(self, product_id: int, name: str | None = None,
                               price: float | None = None, description: str | None = None,

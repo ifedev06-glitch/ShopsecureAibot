@@ -45,14 +45,13 @@ class ShopSecureClient:
     async def list_products(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/api/vendor/products")
 
-    async def create_product(self, name: str, price: float, description: str = "",
-                             stock: int = 0, category_id: int | None = None,
-                             cost_price: float | None = None) -> dict[str, Any]:
-        body: dict[str, Any] = {"name": name, "price": price, "description": description, "stock": stock}
+    async def create_product(self, name: str, price: float, cost_price: float,
+                             description: str, stock: int = 0,
+                             category_id: int | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {"name": name, "price": price, "description": description,
+                                "stock": stock, "costPrice": cost_price}
         if category_id is not None:
             body["categoryId"] = category_id
-        if cost_price is not None:
-            body["costPrice"] = cost_price
         return await self._request("POST", "/api/vendor/products", json=body)
 
     async def update_product(self, product_id: int, name: str | None = None,

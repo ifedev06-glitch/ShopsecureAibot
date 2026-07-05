@@ -117,18 +117,18 @@ _TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "create_product",
-            "description": "Add a new product to the vendor's catalog",
+            "description": "Add a new product to the vendor's catalog with name, selling price, and cost price",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Product name"},
                     "price": {"type": "number", "description": "Selling price in NGN"},
+                    "cost_price": {"type": "number", "description": "Cost price in NGN"},
                     "description": {"type": "string", "description": "Product description"},
                     "stock": {"type": "integer", "description": "Available stock quantity"},
                     "category_id": {"type": "integer", "description": "Category ID (optional)"},
-                    "cost_price": {"type": "number", "description": "Cost price in NGN (optional)"},
                 },
-                "required": ["name", "price"],
+                "required": ["name", "price", "cost_price", "description"],
             },
         },
     },
