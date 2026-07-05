@@ -184,5 +184,13 @@ class ShopSecureClient:
     async def get_receipt(self, sale_id: int) -> dict[str, Any]:
         return await self._request("GET", f"/api/vendor/receipts/{sale_id}")
 
+    async def get_receipt_pdf(self, sale_id: int) -> bytes:
+        resp = await self._client.request("GET", f"/api/vendor/receipts/{sale_id}/pdf",
+                                          headers=self._headers())
+        if not resp.is_success:
+            raise ShopSecureError(f"PDF receipt download failed: {resp.status_code}",
+                                  status=resp.status_code)
+        return resp.content
+
     async def close(self) -> None:
         await self._client.aclose()
