@@ -238,14 +238,10 @@ class AgentAdapter:
             pdf_bytes = generate_receipt_pdf(receipt)
             try:
                 await self._send_document(self._phone, pdf_bytes, f"receipt-{number}.pdf")
-            except Exception:
-                pass
+            except Exception as e:
+                return f"✅ Sale {number} recorded for ₦{total}. Stock updated.\n⚠️ Could not send PDF receipt: {e}"
 
-        lines = [
-            f"✅ Sale {number} recorded for ₦{total}. Stock updated.",
-            "📎 PDF receipt sent to this chat.",
-        ]
-        return "\n".join(lines)
+        return f"✅ Sale {number} recorded for ₦{total}. Stock updated.\n📎 PDF receipt sent!"
 
     # ── Expenses ──
 

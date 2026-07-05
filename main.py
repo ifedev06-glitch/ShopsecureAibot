@@ -139,15 +139,18 @@ async def send_document(to: str, pdf_bytes: bytes, filename: str) -> None:
     # Upload media
     upload_url = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/media"
     headers = {"Authorization": f"Bearer {META_TOKEN}"}
-    files = {
-        "file": (filename, pdf_bytes, "application/pdf"),
-        "type": (None, "application/pdf"),
-        "messaging_product": (None, "whatsapp"),
-    }
     async with httpx.AsyncClient() as client:
-        upload_resp = await client.post(upload_url, headers=headers, files=files)
-        upload_resp.raise_for_status()
-        media_id = upload_resp.json()["id"]
+        upload_resp = await client.post(
+            upload_url, headers=headers,
+            files=[
+                ("messaging_product", "whatsapp"),
+                ("file", (filename, pdf_bytes, "application/pdf")),
+            ],
+        )
+        body = upload_resp.json()
+        if not upload_resp.is_success or "id" not in body:
+            raise RuntimeError(f"Upload failed ({upload_resp.status_code}): {body}")
+        media_id = body["id"]
 
     # Send document
     msg_url = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/messages"
@@ -158,7 +161,10 @@ async def send_document(to: str, pdf_bytes: bytes, filename: str) -> None:
         "document": {"id": media_id, "filename": filename},
     }
     async with httpx.AsyncClient() as client:
-        await client.post(msg_url, json=payload, headers=headers)
+        resp = await client.post(msg_url, json=payload, headers=headers)
+        body = resp.json()
+        if not resp.is_success:
+            raise RuntimeError(f"Send failed ({resp.status}): {body}")
 
 
 # ── Send welcome message (called by backend after linking) ──
