@@ -363,6 +363,7 @@ _SYSTEM = (
     "- For sensitive actions (withdrawal, save bank account), ask the user for their 4-digit transaction PIN.\n"
     "- Do NOT make up information. If you need more details, ask.\n"
     "- When recording a sale, look up the product's listed price first. If the customer paid less than the listed price, calculate the difference as a discount and pass it to create_sale. For example if a product costs ₦500,000 and the user says they sold it for ₦490,000, then discount = 10,000.\n"
+    "- When the user asks about 'today', 'this week', 'this month', or anything date-related, use today's date provided above to calculate the correct date range.\n"
 )
 
 
@@ -371,7 +372,10 @@ async def run_agent(
     api_call_fn: Callable,
     max_turns: int = 5,
 ) -> str:
-    session.append({"role": "system", "content": _SYSTEM})
+    from datetime import date
+    today = date.today()
+    system_with_date = f"Today's date is {today.isoformat()} ({today.strftime('%A')}).\n\n{_SYSTEM}"
+    session.append({"role": "system", "content": system_with_date})
 
     for _ in range(max_turns):
         completion = await client.chat.completions.create(

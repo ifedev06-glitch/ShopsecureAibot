@@ -136,7 +136,7 @@ async def send_whatsapp(to: str, text: str) -> None:
 # ── WhatsApp document send helper ──
 
 async def send_document(to: str, pdf_bytes: bytes, filename: str) -> None:
-    # Upload media
+    print(f"send_document: uploading {len(pdf_bytes)} bytes to Meta...")
     upload_url = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/media"
     headers = {"Authorization": f"Bearer {META_TOKEN}"}
     async with httpx.AsyncClient() as client:
@@ -148,11 +148,13 @@ async def send_document(to: str, pdf_bytes: bytes, filename: str) -> None:
             ],
         )
         body = upload_resp.json()
+        print(f"send_document: upload status={upload_resp.status_code}, body={body}")
         if not upload_resp.is_success or "id" not in body:
             raise RuntimeError(f"Upload failed ({upload_resp.status_code}): {body}")
         media_id = body["id"]
+        print(f"send_document: upload OK, media_id={media_id}")
 
-    # Send document
+    print("send_document: sending document message...")
     msg_url = f"https://graph.facebook.com/v21.0/{META_PHONE_NUMBER_ID}/messages"
     payload = {
         "messaging_product": "whatsapp",
@@ -163,8 +165,10 @@ async def send_document(to: str, pdf_bytes: bytes, filename: str) -> None:
     async with httpx.AsyncClient() as client:
         resp = await client.post(msg_url, json=payload, headers=headers)
         body = resp.json()
+        print(f"send_document: send status={resp.status_code}, body={body}")
         if not resp.is_success:
-            raise RuntimeError(f"Send failed ({resp.status}): {body}")
+            raise RuntimeError(f"Send failed ({resp.status_code}): {body}")
+    print("send_document: DONE")
 
 
 # ── Send welcome message (called by backend after linking) ──

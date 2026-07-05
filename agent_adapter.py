@@ -73,7 +73,7 @@ def generate_receipt_pdf(receipt: dict[str, Any]) -> bytes:
     pdf.set_font("Helvetica", "", 6)
     pdf.cell(0, 4, "Powered by ShopSecure", align="C", new_x="LMARGIN", new_y="NEXT")
 
-    return pdf.output()
+    return bytes(pdf.output())
 
 
 class AgentAdapter:
@@ -225,23 +225,54 @@ class AgentAdapter:
     async def create_sale(self, items: list[dict], customer_name: str = "",
                           customer_phone: str = "", notes: str = "",
                           discount: float | None = None) -> str:
+        print("=== create_sale START ===")
         data = await self._api.create_sale(items, customer_name, customer_phone,
                                             notes, discount)
         sale_id = data.get("id")
         total = data.get("totalAmount", 0)
         number = data.get("saleNumber", "")
+        print(f"create_sale: sale_id={sale_id}, number={number}, total={total}")
 
+        print(f"create_sale: fetching receipt for sale_id={sale_id}")
         receipt = await self._api.get_receipt(sale_id)
+        print(f"create_sale: receipt received, keys={list(receipt.keys())}")
 
-        # Send PDF receipt via WhatsApp document
+        # Build text receipt as fallback
+        receipt_lines = [
+            f"🧾 RECEIPT {receipt['receiptNumber']}",
+            f"🏪 {receipt['businessName']}",
+            f"📅 {receipt['createdAt'][:10]}",
+        ]
+        if receipt.get("customerName"):
+            receipt_lines.append(f"👤 {receipt['customerName']}")
+        receipt_lines.append("")
+        for item in receipt.get("items", []):
+            receipt_lines.append(f"  {item['productName']} ×{item['quantity']}")
+            receipt_lines.append(f"  ₦{float(item['unitPrice']):,.2f} ea → ₦{float(item['total']):,.2f}")
+        receipt_lines.append("")
+        receipt_lines.append(f"  Subtotal          ₦{float(receipt['subtotal']):,.2f}")
+        if receipt.get("discount") and float(receipt["discount"]) > 0:
+            receipt_lines.append(f"  Discount         -₦{float(receipt['discount']):,.2f}")
+        receipt_lines.append(f"  TOTAL             ₦{float(receipt['total']):,.2f}")
+        receipt_lines.append(f"  {receipt['paymentMethod']}")
+        text_receipt = "\n".join(receipt_lines)
+
+        # Try sending PDF receipt via WhatsApp document
         if self._send_document and self._phone:
-            pdf_bytes = generate_receipt_pdf(receipt)
             try:
+                print("create_sale: generating PDF...")
+                pdf_bytes = generate_receipt_pdf(receipt)
+                print(f"create_sale: PDF generated, size={len(pdf_bytes)} bytes")
+                print(f"create_sale: sending document to {self._phone}")
                 await self._send_document(self._phone, pdf_bytes, f"receipt-{number}.pdf")
+                print("create_sale: document sent successfully")
+                return f"✅ Sale {number} recorded for ₦{total}. Stock updated.\n📎 PDF receipt sent!"
             except Exception as e:
-                return f"✅ Sale {number} recorded for ₦{total}. Stock updated.\n⚠️ Could not send PDF receipt: {e}"
+                print(f"create_sale: PDF send FAILED: {e}")
+                return f"✅ Sale {number} recorded for ₦{total}. Stock updated.\n\n⚠️ PDF send failed: {e}\n\n{text_receipt}"
 
-        return f"✅ Sale {number} recorded for ₦{total}. Stock updated.\n📎 PDF receipt sent!"
+        print("create_sale: no send_document function, returning text receipt")
+        return f"✅ Sale {number} recorded for ₦{total}. Stock updated.\n\n{text_receipt}"
 
     # ── Expenses ──
 
