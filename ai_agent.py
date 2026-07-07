@@ -5,6 +5,7 @@ import os
 from typing import Any, Callable
 
 from openai import AsyncOpenAI
+from shopsecure_api import ShopSecureError
 
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -125,10 +126,10 @@ _TOOLS: list[dict[str, Any]] = [
                     "price": {"type": "number", "description": "Selling price in NGN"},
                     "cost_price": {"type": "number", "description": "Cost price in NGN"},
                     "description": {"type": "string", "description": "Product description"},
-                    "stock": {"type": "integer", "description": "Available stock quantity"},
-                    "category_id": {"type": "integer", "description": "Category ID (optional)"},
+                    "stock": {"type": "integer", "description": "Available stock quantity (defaults to 0 if not provided)"},
+                    "category_id": {"type": "integer", "description": "Category ID — list categories first if the user hasn't provided one"},
                 },
-                "required": ["name", "price", "cost_price", "description"],
+                "required": ["name", "price", "cost_price", "description", "category_id"],
             },
         },
     },
@@ -439,6 +440,18 @@ _TOOLS: list[dict[str, Any]] = [
     },
 ]
 
+_TOOL_REQUIRED_FIELDS: dict[str, str] = {
+    "create_product": "name, price, cost_price, description, category_id (list categories first to find the right ID)",
+    "create_expense": "title, amount",
+    "create_sale": "items (productId + quantity for each item)",
+    "create_category": "name",
+    "create_withdrawal": "amount, bank_account_id, pin (4-digit transaction PIN)",
+    "save_bank_account": "account_number, bank_code, pin (4-digit transaction PIN)",
+    "create_pin": "pin (4-digit transaction PIN)",
+    "create_checkout_link_with_products": "items (productId + quantity for each item)",
+    "create_checkout_link_custom": "title, amount",
+}
+
 _SYSTEM = (
     "You are ShopSecure AI, an AI assistant for ShopSecure — a business management platform for Nigerian merchants.\n\n"
     "You help vendors manage their entire business via WhatsApp. You can do EVERYTHING the dashboard can do:\n\n"
@@ -476,6 +489,7 @@ _SYSTEM = (
     "- Do NOT make up information. If you need more details, ask.\n"
     "- When recording a sale, look up the product's listed price first. If the customer paid less than the listed price, calculate the difference as a discount and pass it to create_sale. For example if a product costs ₦500,000 and the user says they sold it for ₦490,000, then discount = 10,000.\n"
     "- When the user asks about 'today', 'this week', 'this month', or anything date-related, use today's date provided above to calculate the correct date range.\n"
+    "- IMPORTANT: Before calling ANY function, make sure the user has provided ALL required fields. If the user gives incomplete information, list EVERY required field for that action and ask them to provide the missing ones. Do NOT guess or make up values.\n"
 )
 
 
@@ -518,6 +532,10 @@ async def run_agent(
             else:
                 try:
                     result = await fn(**args)
+                except ShopSecureError as e:
+                    required = _TOOL_REQUIRED_FIELDS.get(fn_name, "")
+                    hint = f" Required fields: {required}." if required else ""
+                    result = {"error": f"{e}.{hint}"}
                 except Exception as e:
                     result = {"error": str(e)}
 

@@ -32,7 +32,7 @@ class AgentAdapter:
 
     async def create_product(self, name: str, price: float, cost_price: float,
                               description: str, stock: int = 0,
-                              category_id: int | None = None) -> str:
+                              category_id: int = 0) -> str:
         data = await self._api.create_product(name, price, cost_price, description,
                                                 stock, category_id)
         return f"✅ Product '{name}' added at ₦{price} (cost: ₦{cost_price})."
