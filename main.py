@@ -116,7 +116,19 @@ async def keep_typing(phone: str, stop_event: asyncio.Event) -> None:
 _QUICK_REPLIES: dict[str, str] = {
     "hello": "Hey there! 👋 How can I help you with your business today?",
     "hi": "Hey! What can I help you with?",
-    "hey": "Hey! What can I help you with?",
+    "hey": (
+        "Hey! 👋 I'm your ShopSecure business assistant. Here's what I can do:\n\n"
+        "📦 *Products* — Add, edit, search, and track stock levels\n"
+        "💰 *Wallet* — Check balance, withdraw to your bank\n"
+        "🧾 *Sales* — Record sales, send PDF receipts via WhatsApp\n"
+        "🔄 *Swap Sales* — Record trade-in transactions\n"
+        "💸 *Expenses* — Log and categorise every expense\n"
+        "📊 *Reports* — Dashboard summary, P&L, sales & expense reports\n"
+        "🏦 *Bank* — Save and view your bank account details\n"
+        "🧾 *Receipt* — Customise receipt fields and settings\n"
+        "🔐 *PIN* — Create transaction PIN for withdrawals\n\n"
+        "Go ahead — tell me what you need!"
+    ),
     "good morning": "Good morning! ☀️ Ready to take care of business today?",
     "good evening": "Good evening! 🌆 What can I help you with?",
     "what can you do": (
@@ -124,9 +136,12 @@ _QUICK_REPLIES: dict[str, str] = {
         "📦 *Products* — Add, edit, search, and track stock levels\n"
         "💰 *Wallet* — Check balance, withdraw to your bank\n"
         "🧾 *Sales* — Record sales, send PDF receipts via WhatsApp\n"
+        "🔄 *Swap Sales* — Record trade-in transactions\n"
         "💸 *Expenses* — Log and categorise every expense\n"
         "📊 *Reports* — Dashboard summary, P&L, sales & expense reports\n"
-        "🏦 *Bank* — Save and view your bank account details\n\n"
+        "🏦 *Bank* — Save and view your bank account details\n"
+        "🧾 *Receipt* — Customise receipt fields and settings\n"
+        "🔐 *PIN* — Create transaction PIN for withdrawals\n\n"
         "Go ahead, tell me what you need — I'm ready!"
     ),
     "help": (
@@ -135,12 +150,16 @@ _QUICK_REPLIES: dict[str, str] = {
         "  → Add, update, delete, search products\n\n"
         "🧾 *Sales*\n"
         "  → Record sales, view history, delete sales, get PDF receipts\n\n"
+        "🔄 *Swap Sales*\n"
+        "  → Record trade-ins and list swap sales\n\n"
         "💸 *Expenses*\n"
         "  → Log, update, and delete business expenses\n\n"
         "📊 *Reports*\n"
         "  → Dashboard summary, P&L, sales report, expense report\n\n"
         "💰 *Finance*\n"
         "  → Check wallet, save bank account, withdraw, view transactions\n\n"
+        "🧾 *Receipt Customisation*\n"
+        "  → Add custom receipt fields, update receipt settings\n\n"
         "Just say something like \"add a product\" or \"show me my sales\" and I'll take care of it!"
     ),
 }

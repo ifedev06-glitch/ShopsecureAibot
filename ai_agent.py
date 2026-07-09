@@ -118,7 +118,7 @@ _TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "create_product",
-            "description": "Add a new product to the vendor's catalog with name, selling price, and cost price",
+            "description": "Add a new product to the vendor's catalog with name, selling price, cost price, description, stock, and category name",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -126,10 +126,10 @@ _TOOLS: list[dict[str, Any]] = [
                     "price": {"type": "number", "description": "Selling price in NGN"},
                     "cost_price": {"type": "number", "description": "Cost price in NGN"},
                     "description": {"type": "string", "description": "Product description"},
-                    "stock": {"type": "integer", "description": "Available stock quantity (defaults to 0 if not provided)"},
-                    "category_id": {"type": "integer", "description": "Category ID — list categories first if the user hasn't provided one"},
+                    "stock": {"type": "integer", "description": "Available stock quantity"},
+                    "category_name": {"type": "string", "description": "Category name (e.g. Electronics, Fashion)"},
                 },
-                "required": ["name", "price", "cost_price", "description", "category_id"],
+                "required": ["name", "price", "cost_price", "description", "stock", "category_name"],
             },
         },
     },
@@ -367,11 +367,9 @@ _TOOLS: list[dict[str, Any]] = [
                 "properties": {
                     "title": {"type": "string", "description": "Expense title"},
                     "amount": {"type": "number", "description": "Expense amount in NGN"},
-                    "description": {"type": "string", "description": "Expense description (optional)"},
-                    "category": {"type": "string", "description": "Expense category (optional)"},
-                    "expense_date": {"type": "string", "description": "Date of expense in YYYY-MM-DD format (optional)"},
+                    "description": {"type": "string", "description": "What the expense was for"},
                 },
-                "required": ["title", "amount"],
+                "required": ["title", "amount", "description"],
             },
         },
     },
@@ -438,11 +436,104 @@ _TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_swap_sales",
+            "description": "List all swap/trade-in sales",
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "record_swap_sale",
+            "description": "Record a swap trade-in sale. The customer trades in an item (incoming) in exchange for outgoing products from inventory.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "outgoing_items": {
+                        "type": "array",
+                        "description": "List of products the customer is buying, each with productId and quantity",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "productId": {"type": "integer", "description": "Product ID"},
+                                "quantity": {"type": "integer", "description": "Quantity"},
+                            },
+                            "required": ["productId", "quantity"],
+                        },
+                    },
+                    "incoming_product_name": {"type": "string", "description": "Name of the item the customer is trading in"},
+                    "incoming_condition": {"type": "string", "description": "Condition of the trade-in item (New, Like New, Good, Fair, Poor)"},
+                    "incoming_estimated_value": {"type": "number", "description": "Estimated value of the trade-in item in NGN"},
+                    "customer_name": {"type": "string", "description": "Customer name (optional)"},
+                    "customer_phone": {"type": "string", "description": "Customer phone (optional)"},
+                    "notes": {"type": "string", "description": "Sale notes (optional)"},
+                    "discount": {"type": "number", "description": "Discount amount in NGN (optional)"},
+                },
+                "required": ["outgoing_items", "incoming_product_name", "incoming_condition", "incoming_estimated_value"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_custom_field_definitions",
+            "description": "List all custom receipt field definitions for the business",
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_custom_field_definitions",
+            "description": "Save or update custom receipt field definitions. Each field has a name, whether it's required, and whether it shows on the receipt.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "fields": {
+                        "type": "array",
+                        "description": "List of field definitions",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "fieldName": {"type": "string", "description": "Field name (e.g. 'Serial Number', 'Warranty')"},
+                                "required": {"type": "boolean", "description": "Whether this field is required"},
+                                "showOnReceipt": {"type": "boolean", "description": "Whether this field appears on receipts"},
+                            },
+                            "required": ["fieldName", "required", "showOnReceipt"],
+                        },
+                    },
+                },
+                "required": ["fields"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_receipt_settings",
+            "description": "Get the current receipt settings (thank you message, signature, etc.)",
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_receipt_settings",
+            "description": "Update receipt settings (thank you message, signature URL)",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "thank_you_message": {"type": "string", "description": "Thank you message shown on receipts (optional)"},
+                    "signature_url": {"type": "string", "description": "URL to signature image shown on receipts (optional)"},
+                },
+            },
+        },
+    },
 ]
 
 _TOOL_REQUIRED_FIELDS: dict[str, str] = {
-    "create_product": "name, price, cost_price, description, category_id (list categories first to find the right ID)",
-    "create_expense": "title, amount",
+    "create_product": "name, price, cost_price, description, stock, category_name",
+    "create_expense": "title, amount, description",
     "create_sale": "items (productId + quantity for each item)",
     "create_category": "name",
     "create_withdrawal": "amount, bank_account_id, pin (4-digit transaction PIN)",
@@ -450,6 +541,8 @@ _TOOL_REQUIRED_FIELDS: dict[str, str] = {
     "create_pin": "pin (4-digit transaction PIN)",
     "create_checkout_link_with_products": "items (productId + quantity for each item)",
     "create_checkout_link_custom": "title, amount",
+    "record_swap_sale": "outgoing_items, incoming_product_name, incoming_condition, incoming_estimated_value",
+    "save_custom_field_definitions": "fields (each with fieldName, required, showOnReceipt)",
 }
 
 _SYSTEM = (
@@ -457,12 +550,14 @@ _SYSTEM = (
     "You help vendors manage their entire business via WhatsApp. You can do EVERYTHING the dashboard can do:\n\n"
     "Products:\n"
     "- Check wallet balance\n"
-    "- List, add, update, delete, and search products (including cost price and stock)\n"
+    "- List, add, update, delete, and search products (including cost price, stock, and description)\n"
     "- List and create categories\n\n"
-    "Sales:\n"
+    "Sales & Swap Sales:\n"
     "- View pending orders and order history\n"
     "- Create checkout links (with products or custom amounts, with optional discounts)\n"
     "- Record offline sales (bank transfers)\n"
+    "- Record swap trade-in sales (customer trades in an item for outgoing products)\n"
+    "- List swap sales\n"
     "- List and delete recorded sales\n"
     "- Get a text receipt or PDF receipt for any sale\n\n"
     "Expenses:\n"
@@ -478,6 +573,9 @@ _SYSTEM = (
     "- Initiate withdrawals (requires transaction PIN)\n"
     "- List withdrawal history\n"
     "- View transaction history\n\n"
+    "Receipt Customisation:\n"
+    "- List and manage custom receipt field definitions\n"
+    "- View and update receipt settings (thank you message, signature)\n\n"
     "Business Profile:\n"
     "- View business profile details (name, description, phone, address)\n\n"
     "Behaviours:\n"
@@ -488,7 +586,10 @@ _SYSTEM = (
     "- For sensitive actions (withdrawal, save bank account, PIN creation), ask the user for their 4-digit transaction PIN.\n"
     "- Do NOT make up information. If you need more details, ask.\n"
     "- When recording a sale, look up the product's listed price first. If the customer paid less than the listed price, calculate the difference as a discount and pass it to create_sale. For example if a product costs ₦500,000 and the user says they sold it for ₦490,000, then discount = 10,000.\n"
+    "- When recording a swap sale, subtract the incoming item's estimated value from the outgoing total to calculate the amount the customer pays.\n"
+    "- When recording a swap sale, first look up the outgoing products to get their prices and stock.\n"
     "- When the user asks about 'today', 'this week', 'this month', or anything date-related, use today's date provided above to calculate the correct date range.\n"
+    "- When the user wants to customise receipt fields, first call get_custom_field_definitions to show current fields, then guide them on adding/removing fields. Each field needs a fieldName, required (true/false), and showOnReceipt (true/false). Suggest examples like 'Serial Number', 'Warranty Period', 'IMEI'.\n"
     "- IMPORTANT: Before calling ANY function, make sure the user has provided ALL required fields. If the user gives incomplete information, list EVERY required field for that action and ask them to provide the missing ones. Do NOT guess or make up values.\n"
 )
 

@@ -31,10 +31,15 @@ class AgentAdapter:
         return "Your products:\n" + "\n".join(lines)
 
     async def create_product(self, name: str, price: float, cost_price: float,
-                              description: str, stock: int = 0,
-                              category_id: int = 0) -> str:
+                              description: str, stock: int,
+                              category_name: str) -> str:
+        cats = await self._api.list_categories()
+        match = next((c for c in cats if c["name"].lower() == category_name.lower()), None)
+        if not match:
+            available = ", ".join(c["name"] for c in cats)
+            return f"❌ Category '{category_name}' not found. Available categories: {available or 'None'}. Please create the category first or use one of the listed ones."
         data = await self._api.create_product(name, price, cost_price, description,
-                                                stock, category_id)
+                                                stock, match["id"])
         return f"✅ Product '{name}' added at ₦{price} (cost: ₦{cost_price})."
 
     async def update_product(self, product_id: int, name: str | None = None,
@@ -299,9 +304,8 @@ class AgentAdapter:
                  for e in expenses]
         return "Expenses:\n" + "\n".join(lines)
 
-    async def create_expense(self, title: str, amount: float, description: str = "",
-                             category: str = "", expense_date: str = "") -> str:
-        data = await self._api.create_expense(title, amount, description, category, expense_date)
+    async def create_expense(self, title: str, amount: float, description: str) -> str:
+        data = await self._api.create_expense(title, amount, description)
         return f"✅ Expense '{title}' of ₦{amount} recorded."
 
     # ── Reports ──
@@ -377,3 +381,82 @@ class AgentAdapter:
         lines.append(f"Total: ₦{data.get('totalAmount', 0)}")
         lines.append(f"Payment: {data.get('paymentMethod', 'N/A')}")
         return "\n".join(lines)
+
+    # ── Swap Sales ──
+
+    async def list_swap_sales(self) -> str:
+        sales = await self._api.list_swap_sales()
+        if not sales:
+            return "No swap sales recorded yet."
+        lines = []
+        for s in sales:
+            lines.append(
+                f"{s.get('swapSaleNumber', s.get('id', '?'))} - "
+                f"In: {s.get('incomingProductName', '?')} - "
+                f"Out: ₦{s.get('outgoingTotal', 0)} - "
+                f"Paid: ₦{s.get('totalAmountPaid', 0)}"
+            )
+        return "Swap sales:\n" + "\n".join(lines)
+
+    async def record_swap_sale(self, outgoing_items: list[dict],
+                                incoming_product_name: str,
+                                incoming_condition: str,
+                                incoming_estimated_value: float,
+                                customer_name: str = "",
+                                customer_phone: str = "",
+                                customer_email: str = "",
+                                notes: str = "",
+                                discount: float | None = None) -> str:
+        incoming_item = {
+            "productName": incoming_product_name,
+            "condition": incoming_condition,
+            "estimatedValue": incoming_estimated_value,
+        }
+        data = await self._api.create_swap_sale(
+            outgoing_items, incoming_item,
+            customer_name, customer_phone, customer_email, notes, discount,
+        )
+        number = data.get("swapSaleNumber", data.get("id", ""))
+        paid = data.get("totalAmountPaid", 0)
+        lines = [f"✅ Swap sale {number} recorded.\nCustomer pays: ₦{paid}"]
+        if self._send_document and self._phone:
+            try:
+                swap_id = data.get("id")
+                pdf_bytes = await self._api.get_swap_receipt(swap_id)
+                await self._send_document(self._phone, pdf_bytes, f"swap-receipt-{number}.pdf")
+                lines.append("📎 PDF receipt sent!")
+            except Exception:
+                lines.append("(PDF receipt unavailable)")
+        return "\n".join(lines)
+
+    # ── Custom Field Definitions ──
+
+    async def get_custom_field_definitions(self) -> str:
+        fields = await self._api.get_custom_field_definitions()
+        if not fields:
+            return "No custom receipt fields defined."
+        lines = [f"{i+1}. {f['fieldName']} (required: {f.get('required', False)}, show: {f.get('showOnReceipt', True)})"
+                 for i, f in enumerate(fields)]
+        return "Custom receipt fields:\n" + "\n".join(lines)
+
+    async def save_custom_field_definitions(self, fields: list[dict]) -> str:
+        data = await self._api.save_custom_field_definitions(fields)
+        return f"✅ {len(data)} custom field definitions saved."
+
+    # ── Receipt Settings ──
+
+    async def get_receipt_settings(self) -> str:
+        settings = await self._api.get_receipt_settings()
+        msg = settings.get("thankYouMessage", "(not set)")
+        sig = settings.get("signatureUrl", "(none)")
+        return f"🧾 Receipt Settings\nThank you message: {msg}\nSignature URL: {sig}"
+
+    async def update_receipt_settings(self, thank_you_message: str | None = None,
+                                       signature_url: str | None = None) -> str:
+        body: dict[str, Any] = {}
+        if thank_you_message is not None:
+            body["thankYouMessage"] = thank_you_message
+        if signature_url is not None:
+            body["signatureUrl"] = signature_url
+        data = await self._api.update_receipt_settings(body)
+        return f"✅ Receipt settings updated."

@@ -175,15 +175,8 @@ class ShopSecureClient:
     async def list_expenses(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/api/vendor/expenses")
 
-    async def create_expense(self, title: str, amount: float, description: str = "",
-                             category: str = "", expense_date: str = "") -> dict[str, Any]:
-        body: dict[str, Any] = {"title": title, "amount": amount}
-        if description:
-            body["description"] = description
-        if category:
-            body["category"] = category
-        if expense_date:
-            body["expenseDate"] = expense_date
+    async def create_expense(self, title: str, amount: float, description: str) -> dict[str, Any]:
+        body: dict[str, Any] = {"title": title, "amount": amount, "description": description}
         return await self._request("POST", "/api/vendor/expenses", json=body)
 
     async def update_expense(self, expense_id: int, title: str | None = None,
@@ -248,3 +241,45 @@ class ShopSecureClient:
 
     async def close(self) -> None:
         await self._client.aclose()
+
+    # ── Swap Sales ──
+    async def list_swap_sales(self) -> list[dict[str, Any]]:
+        return await self._request("GET", "/api/vendor/swap-sales")
+
+    async def create_swap_sale(self, outgoing_items: list[dict[str, Any]],
+                                incoming_item: dict[str, Any],
+                                customer_name: str = "", customer_phone: str = "",
+                                customer_email: str = "", notes: str = "",
+                                discount: float | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "outgoingItems": outgoing_items,
+            "incomingItem": incoming_item,
+        }
+        if customer_name:
+            body["customerName"] = customer_name
+        if customer_phone:
+            body["customerPhone"] = customer_phone
+        if customer_email:
+            body["customerEmail"] = customer_email
+        if notes:
+            body["notes"] = notes
+        if discount is not None:
+            body["discount"] = discount
+        return await self._request("POST", "/api/vendor/swap-sales", json=body)
+
+    async def get_swap_receipt(self, swap_sale_id: int) -> dict[str, Any]:
+        return await self._request("GET", f"/api/vendor/receipts/swap/{swap_sale_id}")
+
+    # ── Custom Field Definitions ──
+    async def get_custom_field_definitions(self) -> list[dict[str, Any]]:
+        return await self._request("GET", "/api/vendor/custom-field-definitions")
+
+    async def save_custom_field_definitions(self, fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return await self._request("PUT", "/api/vendor/custom-field-definitions", json=fields)
+
+    # ── Receipt Settings ──
+    async def get_receipt_settings(self) -> dict[str, Any]:
+        return await self._request("GET", "/api/vendor/receipt-settings")
+
+    async def update_receipt_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
+        return await self._request("PUT", "/api/vendor/receipt-settings", json=settings)
