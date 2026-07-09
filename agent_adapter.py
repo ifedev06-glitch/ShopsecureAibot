@@ -239,11 +239,12 @@ class AgentAdapter:
         return "Recent sales:\n" + "\n".join(lines)
 
     async def create_sale(self, items: list[dict], customer_name: str = "",
-                          customer_phone: str = "", notes: str = "",
+                          customer_phone: str = "", customer_email: str = "",
+                          notes: str = "",
                           discount: float | None = None) -> str:
         print("=== create_sale START ===")
         data = await self._api.create_sale(items, customer_name, customer_phone,
-                                            notes, discount)
+                                            notes, discount, customer_email)
         sale_id = data.get("id")
         total = data.get("totalAmount", 0)
         number = data.get("saleNumber", "")

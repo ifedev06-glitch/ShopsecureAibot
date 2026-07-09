@@ -156,7 +156,8 @@ class ShopSecureClient:
 
     async def create_sale(self, items: list[dict[str, int]], customer_name: str = "",
                           customer_phone: str = "", notes: str = "",
-                          discount: float | None = None) -> dict[str, Any]:
+                          discount: float | None = None,
+                          customer_email: str = "") -> dict[str, Any]:
         body: dict[str, Any] = {
             "items": items,
             "paymentMethod": "EXTERNAL_BANK",
@@ -165,6 +166,8 @@ class ShopSecureClient:
             body["customerName"] = customer_name
         if customer_phone:
             body["customerPhone"] = customer_phone
+        if customer_email:
+            body["customerEmail"] = customer_email
         if notes:
             body["notes"] = notes
         if discount is not None:

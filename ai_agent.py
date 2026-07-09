@@ -325,7 +325,7 @@ _TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "create_sale",
-            "description": "Record an offline sale (payment received outside the platform, e.g. bank transfer). Customers can optionally provide their name/phone.",
+            "description": "Record an offline sale (payment received outside the platform, e.g. bank transfer). Customers can optionally provide their name/phone/email — receipt will be sent to their email automatically.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -343,6 +343,7 @@ _TOOLS: list[dict[str, Any]] = [
                     },
                     "customer_name": {"type": "string", "description": "Customer name (optional)"},
                     "customer_phone": {"type": "string", "description": "Customer phone (optional)"},
+                    "customer_email": {"type": "string", "description": "Customer email — receipt will be sent here automatically (optional)"},
                     "notes": {"type": "string", "description": "Sale notes (optional)"},
                     "discount": {"type": "number", "description": "Discount amount in NGN (optional)"},
                 },
@@ -468,6 +469,7 @@ _TOOLS: list[dict[str, Any]] = [
                     "incoming_estimated_value": {"type": "number", "description": "Estimated value of the trade-in item in NGN"},
                     "customer_name": {"type": "string", "description": "Customer name (optional)"},
                     "customer_phone": {"type": "string", "description": "Customer phone (optional)"},
+                    "customer_email": {"type": "string", "description": "Customer email — receipt will be sent here automatically (optional)"},
                     "notes": {"type": "string", "description": "Sale notes (optional)"},
                     "discount": {"type": "number", "description": "Discount amount in NGN (optional)"},
                 },
@@ -586,6 +588,7 @@ _SYSTEM = (
     "- For sensitive actions (withdrawal, save bank account, PIN creation), ask the user for their 4-digit transaction PIN.\n"
     "- Do NOT make up information. If you need more details, ask.\n"
     "- When recording a sale, look up the product's listed price first. If the customer paid less than the listed price, calculate the difference as a discount and pass it to create_sale. For example if a product costs ₦500,000 and the user says they sold it for ₦490,000, then discount = 10,000.\n"
+    "- When recording a sale or swap sale, ask if the customer wants a receipt sent to their email. If yes, ask for their email address and include it as customer_email so the receipt is sent automatically.\n"
     "- When recording a swap sale, subtract the incoming item's estimated value from the outgoing total to calculate the amount the customer pays.\n"
     "- When recording a swap sale, first look up the outgoing products to get their prices and stock.\n"
     "- When the user asks about 'today', 'this week', 'this month', or anything date-related, use today's date provided above to calculate the correct date range.\n"
